@@ -1,35 +1,6 @@
 # HLD — High Level Design
 
-```mermaid
-flowchart LR
-    U["Usuário"] -->|HTTP| K["AWS NLB<br/>Kong Gateway"]
-    K -->|rotas públicas| A["Customer Auth API"]
-    K -->|rotas públicas| M["Video Manager API"]
-    K -->|/grafana| G["Grafana"]
-
-    A --> PA[("PostgreSQL Auth")]
-    M --> PV[("PostgreSQL Video")]
-    M -->|arquivo original| SI[("S3 Input")]
-    M -->|VideoProcessingRequested| KF["Kafka"]
-    KF -->|pedido| W["Video Worker API"]
-    W --> MW[("MongoDB Worker")]
-    W -->|leitura| SI
-    W -->|ZIP de frames| SO[("S3 Output")]
-    W -->|VideoProcessed ou<br/>VideoProcessingFailed| KF
-    KF -->|resultado| M
-    M -->|preferência de notificação| A
-    M -->|SMTP| GM["Gmail"]
-    M -->|download autenticado| SO
-
-    A -. métricas e traces .-> O["Prometheus / Jaeger"]
-    M -. métricas e traces .-> O
-    W -. métricas e traces .-> O
-    A -. stdout .-> L["Alloy / Loki"]
-    M -. stdout .-> L
-    W -. stdout .-> L
-    G --> O
-    G --> L
-```
+![HLD da plataforma FIAP X](../assets/images/arquitetura/hdl.png)
 
 ## Responsabilidades
 

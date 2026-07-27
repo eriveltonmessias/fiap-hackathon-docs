@@ -1,68 +1,6 @@
 # LLD — Low Level Design
 
-```mermaid
-flowchart TB
-    subgraph AWS["AWS us-east-1"]
-        S3T[("S3 Terraform state<br/>lockfile nativo")]
-        VPC["VPC e 3 subnets públicas"]
-        EKS["EKS + managed node group"]
-        ECR["ECR<br/>3 imagens"]
-        NLB["Network Load Balancer"]
-
-        subgraph KONG["namespace kong"]
-            KG["Kong DB-less<br/>Service LoadBalancer"]
-        end
-
-        subgraph APP["namespace fiap-x-apps"]
-            AUTH["customer-auth-api<br/>HTTP 8081"]
-            MAN["video-manager-api<br/>HTTP 8082"]
-            WORK["video-worker-api<br/>8083 interno"]
-        end
-
-        subgraph DATA["namespace data-plataform"]
-            P1[("postgres-auth")]
-            P2[("postgres-video")]
-            MO[("mongo-worker")]
-            KA["Kafka<br/>3 tópicos / 3 partições"]
-        end
-
-        subgraph OBS["namespace observability"]
-            PR["Prometheus"]
-            LO["Loki"]
-            AL["Alloy DaemonSet"]
-            JA["Jaeger"]
-            GR["Grafana"]
-        end
-
-        B1[("S3 vídeos input")]
-        B2[("S3 vídeos output")]
-    end
-
-    S3T -. remote state .-> EKS
-    VPC --> EKS
-    EKS --> KONG
-    EKS --> APP
-    EKS --> DATA
-    EKS --> OBS
-    ECR --> APP
-    NLB --> KG
-    KG --> AUTH
-    KG --> MAN
-    KG --> GR
-    MAN --> KA
-    KA --> WORK
-    KA --> MAN
-    MAN --> B1
-    WORK --> B1
-    WORK --> B2
-    MAN --> B2
-    AUTH --> P1
-    MAN --> P2
-    WORK --> MO
-    AL --> LO
-    APP -. scrape .-> PR
-    APP -. OTLP/HTTP .-> JA
-```
+![LLD da plataforma FIAP X](../assets/images/arquitetura/lld.png)
 
 ## Stacks e states
 
