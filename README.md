@@ -23,7 +23,7 @@ completo já estejam disponíveis quando o Manager for publicado.
 
 | Área | Conteúdo |
 | --- | --- |
-| [Arquitetura](docs/01-arquitetura/README.md) | HLD, LLD, fluxo ponta a ponta e estados. |
+| [Arquitetura](docs/01-arquitetura/README.md) | HLD, LLD, Event Storming, fluxo ponta a ponta e estados. |
 | [Integrações](docs/02-integracoes/README.md) | APIs públicas e internas, eventos Kafka e regras de idempotência. |
 | [Infraestrutura](docs/03-infraestrutura/README.md) | Ordem operacional, Terraform state e dependências entre stacks. |
 | [Observabilidade](docs/04-observabilidade/README.md) | Métricas, logs, traces, dashboards e acesso ao Grafana. |
