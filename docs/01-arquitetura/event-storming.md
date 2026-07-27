@@ -16,7 +16,145 @@ integração implementados; os demais representam fatos internos do domínio.
 | Sistema externo | Rosa | Dependência fora do domínio da aplicação. |
 | Exceção | Vermelho | Resultado alternativo ou falha. |
 
-## Fluxo principal
+## Etapa 1 — Descoberta caótica dos eventos
+
+Nesta etapa os participantes registram fatos relevantes no passado sem tentar
+ordená-los ou agrupá-los. A posição dos eventos nesta tabela é
+intencionalmente aleatória.
+
+| Evento descoberto | Evento descoberto | Evento descoberto | Evento descoberto |
+| --- | --- | --- | --- |
+| Vídeo processado | Cliente cadastrado | ZIP gerado | Notificação falhou |
+| Frames extraídos | Resultado baixado | Vídeo armazenado | Processamento iniciado |
+| Cliente autenticado | Solicitação publicada | Arquivo de entrada não encontrado | Preferência de notificação consultada |
+| Job registrado | Vídeo marcado como falha | Upload recebido | Notificação enviada |
+| Resultado armazenado | Tentativa reagendada | Evento duplicado ignorado | Processamento falhou |
+
+O objetivo é ampliar a descoberta. Repetições e nomes diferentes para o mesmo
+fato são resolvidos somente na etapa seguinte.
+
+## Etapa 2 — Eventos organizados em ordem
+
+Depois da descoberta, os eventos são normalizados e colocados na linha do tempo
+do fluxo principal.
+
+```mermaid
+flowchart LR
+    E1["Cliente cadastrado"] --> E2["Cliente autenticado"]
+    E2 --> E3["Upload recebido"]
+    E3 --> E4["Vídeo armazenado"]
+    E4 --> E5["Solicitação registrada"]
+    E5 --> E6["VideoProcessingRequested"]
+    E6 --> E7["Job registrado"]
+    E7 --> E8["Processamento iniciado"]
+    E8 --> E9["Frames extraídos"]
+    E9 --> E10["ZIP gerado"]
+    E10 --> E11["Resultado armazenado"]
+    E11 --> E12["VideoProcessed"]
+    E12 --> E13["Vídeo marcado como PROCESSED"]
+    E13 --> E14["Preferência consultada"]
+    E14 --> E15["Notificação enviada"]
+    E15 --> E16["Resultado baixado"]
+
+    classDef event fill:#fed7aa,stroke:#ea580c,color:#111827;
+    class E1,E2,E3,E4,E5,E6,E7,E8,E9,E10,E11,E12,E13,E14,E15,E16 event;
+```
+
+O fluxo alternativo começa durante o processamento:
+
+```mermaid
+flowchart LR
+    E1["Falha detectada"] --> E2["Tentativa reagendada"]
+    E2 -->|nova falha e limite atingido| E3["Mensagem enviada à DLQ"]
+    E1 -->|falha terminal| E4["VideoProcessingFailed"]
+    E3 --> E4
+    E4 --> E5["Vídeo marcado como FAILED"]
+    E5 --> E6["Notificação de falha enviada"]
+    E6 -->|falha no canal| E7["Falha de notificação registrada"]
+
+    classDef failure fill:#fecaca,stroke:#dc2626,color:#111827;
+    class E1,E2,E3,E4,E5,E6,E7 failure;
+```
+
+## Etapa 3 — Eventos pivotais
+
+Eventos pivotais delimitam fases relevantes, mudam a responsabilidade pelo
+fluxo ou abrem caminhos alternativos.
+
+| Evento pivotal | Por que divide o fluxo | Próxima fase |
+| --- | --- | --- |
+| Vídeo armazenado | Confirma que o binário de entrada está durável. | Solicitação assíncrona |
+| `VideoProcessingRequested` | Transfere a execução do Manager para o Worker. | Processamento técnico |
+| `VideoProcessed` | Encerra o Worker com resultado disponível. | Atualização e notificação |
+| `VideoProcessingFailed` | Abre o caminho terminal de falha. | Atualização e notificação de erro |
+| Vídeo marcado como `PROCESSED` ou `FAILED` | Torna o estado final visível ao cliente. | Comunicação |
+| Notificação enviada ou falha registrada | Encerra a tentativa automática de comunicação. | Consulta ou download pelo cliente |
+
+```mermaid
+flowchart LR
+    P1["Vídeo armazenado"]
+    P2["VideoProcessingRequested"]
+    P3{"Resultado do Worker"}
+    P4["VideoProcessed"]
+    P5["VideoProcessingFailed"]
+    P6{"Estado público atualizado"}
+    P7["Notificação encerrada"]
+
+    P1 --> P2 --> P3
+    P3 --> P4 --> P6
+    P3 --> P5 --> P6
+    P6 --> P7
+
+    classDef pivotal fill:#fb923c,stroke:#9a3412,color:#111827,stroke-width:3px;
+    class P1,P2,P3,P4,P5,P6,P7 pivotal;
+```
+
+## Etapa 4 — Agregados
+
+Os eventos são agrupados pelas unidades que protegem invariantes e controlam
+transições.
+
+```mermaid
+flowchart LR
+    subgraph CUSTOMER["Agregado Cliente"]
+        C1["Cadastrar cliente"] --> CE1["Cliente cadastrado"]
+        C2["Autenticar cliente"] --> CE2["Cliente autenticado"]
+        C3["Consultar preferência"] --> CE3["Preferência retornada"]
+    end
+
+    subgraph VIDEO["Agregado Vídeo"]
+        V1["Receber upload"] --> VE1["Vídeo armazenado"]
+        V2["Solicitar processamento"] --> VE2["VideoProcessingRequested"]
+        V3["Aplicar resultado"] --> VE3["Vídeo PROCESSED ou FAILED"]
+        V4["Autorizar download"] --> VE4["Resultado baixado"]
+    end
+
+    subgraph JOB["Agregado Job de processamento"]
+        J1["Registrar pedido"] --> JE1["Job registrado"]
+        J2["Processar vídeo"] --> JE2["Frames extraídos"]
+        JE2 --> JE3["ZIP armazenado"]
+        J3["Concluir job"] --> JE4["VideoProcessed"]
+        J4["Falhar job"] --> JE5["VideoProcessingFailed"]
+    end
+
+    classDef command fill:#bfdbfe,stroke:#2563eb,color:#111827;
+    classDef event fill:#fed7aa,stroke:#ea580c,color:#111827;
+    class C1,C2,C3,V1,V2,V3,V4,J1,J2,J3,J4 command;
+    class CE1,CE2,CE3,VE1,VE2,VE3,VE4,JE1,JE2,JE3,JE4,JE5 event;
+```
+
+| Agregado | Responsabilidade | Invariantes principais |
+| --- | --- | --- |
+| Cliente | Cadastro, credenciais e preferência de notificação. | E-mail único, senha válida e canal de notificação consistente. |
+| Vídeo | Propriedade, objetos e estado público do processamento. | Somente o proprietário consulta; download apenas em `PROCESSED`; estados terminais não reabrem. |
+| Job de processamento | Tentativas, etapas técnicas, falha e resultado do Worker. | Um job por vídeo/evento; transições ordenadas; `COMPLETED` e `FAILED` são terminais. |
+
+## Etapa 5 — Modelo enriquecido
+
+Com a linha do tempo, os pivôs e agregados definidos, são adicionados atores,
+comandos, políticas e sistemas externos.
+
+### Fluxo principal
 
 ```mermaid
 flowchart LR
@@ -77,7 +215,7 @@ flowchart LR
     class X1,X2,X3 external;
 ```
 
-## Fluxos de exceção
+### Fluxos de exceção
 
 ```mermaid
 flowchart LR
@@ -116,16 +254,6 @@ flowchart LR
     class J aggregate;
     class F1,F2,F3,DLQ,VF,NF failure;
 ```
-
-## Elementos do domínio
-
-### Agregados
-
-| Agregado | Responsabilidade |
-| --- | --- |
-| Cliente | Cadastro, credenciais e preferência de notificação. |
-| Vídeo | Propriedade, localização dos objetos e estado público do processamento. |
-| Job de processamento | Tentativas, etapas técnicas, falha e resultado do Worker. |
 
 ### Políticas
 
